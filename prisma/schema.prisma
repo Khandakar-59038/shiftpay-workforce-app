@@ -1,0 +1,128 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id              String           @id @default(cuid())
+  name            String
+  email           String           @unique
+  passwordHash    String
+  role            String // WORKER | MANAGER | ADMIN
+  hourlyRateCents Int              @default(0)
+  isActive        Boolean          @default(true)
+  createdAt       DateTime         @default(now())
+  schedules       Schedule[]       @relation("WorkerSchedules")
+  leaveRequests   LeaveRequest[]   @relation("WorkerLeave")
+  payments        Payment[]
+  notifications   Notification[]
+  adjustments     TimeAdjustment[] @relation("WorkerAdjustments")
+}
+
+model CompanySettings {
+  id                     Int    @id @default(1)
+  weeklyHourLimit        Float  @default(40)
+  overtimeMultiplier     Float  @default(1.5)
+  overtimeAlertThreshold Float  @default(10)
+  paidLeaveDaysPerYear   Int    @default(15)
+  standardDayHours       Float  @default(8)
+  currencyCode           String @default("USD")
+  payFrequencyDefault    String @default("WEEKLY")
+}
+
+model Schedule {
+  id          String        @id @default(cuid())
+  workerId    String
+  worker      User          @relation("WorkerSchedules", fields: [workerId], references: [id])
+  periodType  String // WEEKLY | MONTHLY
+  periodStart String // YYYY-MM-DD (Monday or 1st of month)
+  status      String        @default("PENDING") // PENDING | APPROVED | REJECTED | SUPERSEDED
+  submittedAt DateTime      @default(now())
+  decidedById String?
+  decidedAt   DateTime?
+  managerNote String?
+  days        ScheduleDay[]
+}
+
+model ScheduleDay {
+  id         String   @id @default(cuid())
+  scheduleId String
+  schedule   Schedule @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+  date       String // YYYY-MM-DD
+  hours      Float
+
+  @@unique([scheduleId, date])
+}
+
+model TimeAdjustment {
+  id          String   @id @default(cuid())
+  workerId    String
+  worker      User     @relation("WorkerAdjustments", fields: [workerId], references: [id])
+  date        String // YYYY-MM-DD
+  deltaHours  Float
+  reason      String
+  createdById String
+  createdAt   DateTime @default(now())
+}
+
+model LeaveRequest {
+  id          String    @id @default(cuid())
+  workerId    String
+  worker      User      @relation("WorkerLeave", fields: [workerId], references: [id])
+  type        String // PAID | UNPAID
+  startDate   String // YYYY-MM-DD
+  endDate     String // YYYY-MM-DD
+  reason      String
+  status      String    @default("PENDING") // PENDING | APPROVED | REJECTED
+  decidedById String?
+  decidedAt   DateTime?
+  managerNote String?
+  createdAt   DateTime  @default(now())
+}
+
+model PayrollRun {
+  id               String    @id @default(cuid())
+  periodStart      String // YYYY-MM-DD
+  periodEnd        String // YYYY-MM-DD
+  frequency        String // WEEKLY | MONTHLY
+  processedById    String
+  settingsSnapshot String // JSON of the settings used for this run
+  createdAt        DateTime  @default(now())
+  payments         Payment[]
+}
+
+model Payment {
+  id                 String     @id @default(cuid())
+  payrollRunId       String
+  payrollRun         PayrollRun @relation(fields: [payrollRunId], references: [id])
+  workerId           String
+  worker             User       @relation(fields: [workerId], references: [id])
+  periodStart        String
+  periodEnd          String
+  regularHours       Float
+  overtimeHours      Float
+  paidLeaveHours     Float
+  grossRegularCents  Int
+  grossOvertimeCents Int
+  paidLeaveCents     Int
+  deductionCents     Int
+  netCents           Int
+  status             String     @default("PAID")
+  createdAt          DateTime   @default(now())
+}
+
+model Notification {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id])
+  type      String
+  title     String
+  body      String
+  href      String?
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+}
