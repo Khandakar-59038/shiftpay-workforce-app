@@ -14,10 +14,10 @@ export class ApiError extends Error {
 type Handler<Ctx> = (req: Request, ctx: Ctx) => Promise<Response>;
 
 /** Wrap a route handler with the shared error envelope. */
-export function handle<Ctx = unknown>(fn: Handler<Ctx>): Handler<Ctx> {
-  return async (req, ctx) => {
+export function handle<Ctx = unknown>(fn: Handler<Ctx>) {
+  return async (req: Request, ctx?: Ctx): Promise<Response> => {
     try {
-      return await fn(req, ctx);
+      return await fn(req, ctx as Ctx);
     } catch (err) {
       if (err instanceof ApiError) {
         return NextResponse.json(
