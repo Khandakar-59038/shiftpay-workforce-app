@@ -1,36 +1,69 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# ShiftPay — Workforce Management
 
-## Getting Started
+Work schedules, time tracking, leave management, and payroll disbursement for
+workers, managers, and admins. Built from the client SRS (see
+`docs/superpowers/specs/`).
 
-First, run the development server:
+## Quick start
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
+npx prisma migrate dev   # creates prisma/dev.db
+npm run db:seed          # demo accounts + three weeks of data
+npm run dev              # http://localhost:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### Demo accounts (password: `demo1234`)
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+| Role    | Email                 |
+| ------- | --------------------- |
+| Admin   | admin@shiftpay.demo   |
+| Manager | manager@shiftpay.demo |
+| Worker  | alice@shiftpay.demo (also bob, carol, dave) |
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## What it does
 
-## Learn More
+**Workers** — submit weekly or monthly schedules for approval, see worked
+hours with overtime split out per ISO week, request paid/unpaid leave against
+an annual balance, download timesheets (CSV) and payslips (print/PDF), and get
+notified on every approval and payment.
 
-To learn more about Next.js, take a look at the following resources:
+**Managers** — approve/reject schedules and leave (with notes workers see),
+view any worker's hours, adjust hours with an audit reason, get overtime
+alerts past a configurable threshold, and run weekly/monthly payroll with a
+full per-worker preview (regular + overtime×multiplier + paid leave −
+unpaid-leave deduction) before disbursing in one transaction. Paid periods
+can't be paid twice.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+**Admins** — manage users (roles, hourly rates, password resets,
+deactivation) and company policy (weekly hour limit, overtime multiplier and
+alert threshold, leave allowance, standard day hours, currency, default pay
+frequency).
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Stack
 
-## Deploy on Vercel
+Next.js 15 (App Router, TypeScript) · Prisma + SQLite · Zod · bcryptjs + jose
+(signed httpOnly session cookies) · Tailwind CSS v4 · Vitest.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+All money is stored as integer cents; calendar dates as `YYYY-MM-DD` strings.
+Business logic lives in pure, unit-tested modules under `src/lib/`
+(`payroll.ts`, `leave.ts`, `dates.ts`, `hours.ts`); REST endpoints under
+`src/app/api/` (SRS 4.2) are covered by integration tests against a throwaway
+SQLite database.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Commands
+
+| Command           | What it does                       |
+| ----------------- | ---------------------------------- |
+| `npm run dev`     | dev server on :3000                |
+| `npm run build`   | production build                   |
+| `npm test`        | unit + API tests (95)              |
+| `npm run db:seed` | reset + reseed demo data           |
+| `npm run lint`    | eslint                             |
+
+## Notes
+
+- Payroll disbursement is simulated (recorded + notified); the REST API is the
+  integration point for a real payroll provider later (SRS 4.2).
+- `.env` needs `DATABASE_URL` and a random `SESSION_SECRET` (see
+  `.env.example`).

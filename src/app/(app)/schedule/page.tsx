@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { addDays, eachDate, formatDate, mondayOf, monthRange, todayStr } from "../../../lib/dates";
 import { api } from "../../../lib/client";
 import { useToast } from "../../../components/toast";
@@ -62,7 +62,15 @@ export default function SchedulePage() {
     [history, periodType, periodStart],
   );
 
+  // "Edit & resubmit" loads hours directly; skip the period-change prefill once
+  // so it doesn't wipe them (rejected schedules aren't "live" and prefill empty).
+  const skipPrefill = useRef(false);
+
   useEffect(() => {
+    if (skipPrefill.current) {
+      skipPrefill.current = false;
+      return;
+    }
     if (existing) {
       setHours(Object.fromEntries(existing.days.map((d) => [d.date, d.hours])));
     } else {
@@ -109,6 +117,7 @@ export default function SchedulePage() {
   }
 
   function loadFrom(s: Schedule) {
+    skipPrefill.current = true;
     setPeriodType(s.periodType);
     if (s.periodType === "WEEKLY") setWeekStart(s.periodStart);
     else setMonth(s.periodStart.slice(0, 7));
