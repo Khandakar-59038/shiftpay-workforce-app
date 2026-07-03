@@ -10,6 +10,7 @@ const PUBLIC_FIELDS = {
   email: true,
   role: true,
   hourlyRateCents: true,
+  phone: true,
   isActive: true,
   createdAt: true,
 } as const;
@@ -30,6 +31,7 @@ const createSchema = z.object({
   password: z.string().min(8).max(200),
   role: z.enum(["WORKER", "MANAGER", "ADMIN"]),
   hourlyRateCents: z.number().int().min(0).max(100_000_000),
+  phone: z.string().max(30).optional(),
 });
 
 export const POST = handle(async (req) => {
@@ -47,6 +49,7 @@ export const POST = handle(async (req) => {
       passwordHash: await hashPassword(body.password),
       role: body.role,
       hourlyRateCents: body.hourlyRateCents,
+      phone: body.phone?.trim() || null,
     },
     select: PUBLIC_FIELDS,
   });

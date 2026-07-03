@@ -71,6 +71,23 @@ const paths: Record<string, React.ReactNode> = {
       <path d="M4 21h16" />
     </>
   ),
+  chat: (
+    <>
+      <path d="M21 12a8 8 0 0 1-8 8H4l2-3a8 8 0 1 1 15-5z" />
+      <path d="M8.5 11h.01M12 11h.01M15.5 11h.01" />
+    </>
+  ),
+  phone: (
+    <>
+      <path d="M5 3h4l2 5-2.5 1.5a12 12 0 0 0 6 6L16 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 5a2 2 0 0 1 2-2z" />
+    </>
+  ),
+  mail: (
+    <>
+      <rect x="3" y="5" width="18" height="14" rx="2" />
+      <path d="M3 7l9 6 9-6" />
+    </>
+  ),
 };
 
 export function Icon({

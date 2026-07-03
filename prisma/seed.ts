@@ -11,6 +11,8 @@ import { computeWorkerPayroll } from "../src/lib/payroll-db";
 import { getSettings } from "../src/lib/settings";
 
 async function wipe() {
+  await prisma.message.deleteMany();
+  await prisma.timeEntry.deleteMany();
   await prisma.notification.deleteMany();
   await prisma.payment.deleteMany();
   await prisma.payrollRun.deleteMany();
@@ -27,17 +29,17 @@ async function main() {
   await prisma.companySettings.create({ data: { id: 1 } });
 
   const password = await hashPassword("demo1234");
-  const mk = (name: string, email: string, role: string, rate: number) =>
+  const mk = (name: string, email: string, role: string, rate: number, phone: string) =>
     prisma.user.create({
-      data: { name, email, passwordHash: password, role, hourlyRateCents: rate },
+      data: { name, email, passwordHash: password, role, hourlyRateCents: rate, phone },
     });
 
-  const admin = await mk("Nadia Islam", "admin@shiftpay.demo", "ADMIN", 4000);
-  const manager = await mk("Maya Rahman", "manager@shiftpay.demo", "MANAGER", 3500);
-  const alice = await mk("Alice Chen", "alice@shiftpay.demo", "WORKER", 2400);
-  const bob = await mk("Bob Torres", "bob@shiftpay.demo", "WORKER", 2000);
-  const carol = await mk("Carol Osei", "carol@shiftpay.demo", "WORKER", 2800);
-  const dave = await mk("Dave Karim", "dave@shiftpay.demo", "WORKER", 1800);
+  const admin = await mk("Nadia Islam", "admin@shiftpay.demo", "ADMIN", 4000, "+45 20 11 22 33");
+  const manager = await mk("Maya Rahman", "manager@shiftpay.demo", "MANAGER", 3500, "+45 20 44 55 66");
+  const alice = await mk("Alice Chen", "alice@shiftpay.demo", "WORKER", 2400, "+45 20 77 88 99");
+  const bob = await mk("Bob Torres", "bob@shiftpay.demo", "WORKER", 2000, "+45 31 12 34 56");
+  const carol = await mk("Carol Osei", "carol@shiftpay.demo", "WORKER", 2800, "+45 31 65 43 21");
+  const dave = await mk("Dave Karim", "dave@shiftpay.demo", "WORKER", 1800, "+45 42 99 88 77");
 
   const today = todayStr();
   const weekA = mondayOf(addDays(today, -14)); // fully in the past
@@ -240,6 +242,49 @@ async function main() {
       managerNote: "Release week — can we do the following week instead?",
     },
   });
+
+  // ── Time clock entries: one approved, one awaiting approval ──
+  const yesterday = addDays(today, -1);
+  await prisma.timeEntry.create({
+    data: {
+      workerId: carol.id,
+      date: yesterday,
+      kind: "SCHEDULED",
+      clockIn: new Date(`${yesterday}T08:30:00`),
+      clockOut: new Date(`${yesterday}T16:00:00`),
+      hours: 7.5,
+      note: "Smooth shift, till balanced.",
+      status: "APPROVED",
+      decidedById: manager.id,
+      decidedAt: new Date(),
+    },
+  });
+  await prisma.timeEntry.create({
+    data: {
+      workerId: dave.id,
+      date: yesterday,
+      kind: "EXTRA",
+      clockIn: new Date(`${yesterday}T18:00:00`),
+      clockOut: new Date(`${yesterday}T20:00:00`),
+      hours: 2,
+      note: "Inventory count for the back room.",
+      status: "PENDING",
+    },
+  });
+  await notifyManagers(prisma, {
+    type: "TIMESHEET_SUBMITTED",
+    title: "Shift awaiting approval",
+    body: `Dave Karim clocked 2h on ${formatDate(yesterday)} (extra work): “Inventory count for the back room.”`,
+    href: "/approvals",
+  });
+
+  // ── Chat: company channel + an unread DM for the manager ──
+  const msg = (senderId: string, body: string, recipientId?: string) =>
+    prisma.message.create({ data: { senderId, recipientId: recipientId ?? null, body } });
+  await msg(admin.id, "Welcome to the ShiftPay company channel — schedules, hours and pay all live here now.");
+  await msg(manager.id, "Reminder: submit next week's schedules by Friday. The board fills up fast.");
+  await msg(alice.id, "The new espresso machine is here. Team morale +10.");
+  await msg(alice.id, "Hi Maya — could you look at my Saturday hours when you get a minute?", manager.id);
 
   const counts = {
     users: await prisma.user.count(),

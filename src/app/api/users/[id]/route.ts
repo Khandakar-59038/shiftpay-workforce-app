@@ -10,6 +10,7 @@ const patchSchema = z.object({
   hourlyRateCents: z.number().int().min(0).max(100_000_000).optional(),
   isActive: z.boolean().optional(),
   newPassword: z.string().min(8).max(200).optional(),
+  phone: z.string().max(30).optional(),
 });
 
 type Ctx = { params: Promise<{ id: string }> };
@@ -35,6 +36,7 @@ export const PATCH = handle<Ctx>(async (req, { params }) => {
         : {}),
       ...(body.isActive !== undefined ? { isActive: body.isActive } : {}),
       ...(body.newPassword ? { passwordHash: await hashPassword(body.newPassword) } : {}),
+      ...(body.phone !== undefined ? { phone: body.phone.trim() || null } : {}),
     },
     select: {
       id: true,
@@ -42,6 +44,7 @@ export const PATCH = handle<Ctx>(async (req, { params }) => {
       email: true,
       role: true,
       hourlyRateCents: true,
+      phone: true,
       isActive: true,
       createdAt: true,
     },

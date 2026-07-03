@@ -12,6 +12,7 @@ const NAV: Record<string, { href: string; label: string; icon: string }[]> = {
     { href: "/time", label: "Time & Overtime", icon: "clock" },
     { href: "/leave", label: "Leave", icon: "leave" },
     { href: "/pay", label: "Pay", icon: "banknote" },
+    { href: "/chat", label: "Chat", icon: "chat" },
     { href: "/notifications", label: "Notifications", icon: "bell" },
   ],
   MANAGER: [
@@ -21,12 +22,14 @@ const NAV: Record<string, { href: string; label: string; icon: string }[]> = {
     { href: "/team-time", label: "Team Time", icon: "clock" },
     { href: "/leave-approvals", label: "Leave Approvals", icon: "leave" },
     { href: "/payroll", label: "Payroll", icon: "banknote" },
+    { href: "/chat", label: "Chat", icon: "chat" },
     { href: "/notifications", label: "Notifications", icon: "bell" },
   ],
   ADMIN: [
     { href: "/dashboard", label: "Dashboard", icon: "grid" },
     { href: "/users", label: "Users", icon: "users" },
     { href: "/settings", label: "Company Settings", icon: "cog" },
+    { href: "/chat", label: "Chat", icon: "chat" },
     { href: "/notifications", label: "Notifications", icon: "bell" },
   ],
 };
