@@ -31,15 +31,34 @@ async function schedule(
 }
 
 describe("GET /api/schedule-board", () => {
-  it("forbids workers", async () => {
+  it("gives workers a privacy-safe view: approved shifts only, no pay data", async () => {
     const worker = await createUser("WORKER");
+    const colleague = await createUser("WORKER", { hourlyRateCents: 9999 });
+    const monday = week();
+    await schedule(colleague.id, monday, "APPROVED", [8, 8, 8, 8, 8]);
+    await schedule(worker.id, monday, "PENDING", [8, 8, 0, 0, 0]);
+
     const res = await getBoard(
-      jsonRequest(`/api/schedule-board?weekStart=${week()}`, {
+      jsonRequest(`/api/schedule-board?weekStart=${monday}`, {
         method: "GET",
         cookie: await authCookie(worker),
       }),
     );
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(200);
+    const data = await res.json();
+    expect(data.viewer).toBe("WORKER");
+    expect(JSON.stringify(data)).not.toContain("9999");
+    expect(data.totals.weekCostCents).toBeUndefined();
+    expect(data.pendingSchedules).toHaveLength(0);
+
+    const colleagueRow = data.workers.find(
+      (w: { worker: { id: string } }) => w.worker.id === colleague.id,
+    );
+    expect(colleagueRow.cells[monday].approved).toBe(8);
+    expect(colleagueRow.cost).toBeUndefined();
+    // Pending schedules are not shown to workers.
+    const ownRow = data.workers.find((w: { worker: { id: string } }) => w.worker.id === worker.id);
+    expect(ownRow.cells[monday].pending).toBe(0);
   });
 
   it("returns the grid with per-worker and week totals and OT-aware cost", async () => {

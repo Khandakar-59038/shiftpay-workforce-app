@@ -8,6 +8,7 @@ const NAV: Record<string, { href: string; label: string; icon: string }[]> = {
   WORKER: [
     { href: "/dashboard", label: "Dashboard", icon: "grid" },
     { href: "/schedule", label: "My Schedule", icon: "calendar" },
+    { href: "/schedule-board", label: "Team Schedule", icon: "users" },
     { href: "/time", label: "Time & Overtime", icon: "clock" },
     { href: "/leave", label: "Leave", icon: "leave" },
     { href: "/pay", label: "Pay", icon: "banknote" },

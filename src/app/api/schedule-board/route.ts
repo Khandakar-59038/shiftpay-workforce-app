@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "../../../lib/db";
 import { ApiError, handle } from "../../../lib/api";
-import { requireRole } from "../../../lib/auth";
+import { requireUser } from "../../../lib/auth";
 import { addDays, eachDate, isValidDate, mondayOf, todayStr } from "../../../lib/dates";
 import { laborCost } from "../../../lib/insights";
 import { getSettings } from "../../../lib/settings";
@@ -12,8 +12,12 @@ interface Cell {
   onLeave: "PAID" | "UNPAID" | null;
 }
 
+// Managers see everything including pay data; workers see who works when
+// (approved shifts + leave only, no rates or costs — pay is private).
 export const GET = handle(async (req) => {
-  await requireRole(req, "MANAGER", "ADMIN");
+  const session = await requireUser(req);
+  const isManager = session.role === "MANAGER" || session.role === "ADMIN";
+
   const url = new URL(req.url);
   const weekStart = url.searchParams.get("weekStart") ?? mondayOf(todayStr());
   if (!isValidDate(weekStart) || mondayOf(weekStart) !== weekStart) {
@@ -22,6 +26,7 @@ export const GET = handle(async (req) => {
   const weekEnd = addDays(weekStart, 6);
   const dates = eachDate(weekStart, weekEnd);
   const settings = await getSettings();
+  const visibleStatuses = isManager ? ["APPROVED", "PENDING"] : ["APPROVED"];
 
   const workers = await prisma.user.findMany({
     where: { role: "WORKER", isActive: true },
@@ -34,7 +39,7 @@ export const GET = handle(async (req) => {
     prisma.scheduleDay.findMany({
       where: {
         date: { gte: weekStart, lte: weekEnd },
-        schedule: { workerId: { in: workerIds }, status: { in: ["APPROVED", "PENDING"] } },
+        schedule: { workerId: { in: workerIds }, status: { in: visibleStatuses } },
       },
       include: { schedule: { select: { id: true, status: true, workerId: true } } },
     }),
@@ -46,17 +51,19 @@ export const GET = handle(async (req) => {
         endDate: { gte: weekStart },
       },
     }),
-    prisma.schedule.findMany({
-      where: {
-        status: "PENDING",
-        workerId: { in: workerIds },
-        days: { some: { date: { gte: weekStart, lte: weekEnd } } },
-      },
-      include: {
-        days: { orderBy: { date: "asc" } },
-        worker: { select: { id: true, name: true } },
-      },
-    }),
+    isManager
+      ? prisma.schedule.findMany({
+          where: {
+            status: "PENDING",
+            workerId: { in: workerIds },
+            days: { some: { date: { gte: weekStart, lte: weekEnd } } },
+          },
+          include: {
+            days: { orderBy: { date: "asc" } },
+            worker: { select: { id: true, name: true } },
+          },
+        })
+      : Promise.resolve([]),
   ]);
 
   const emptyCell = (): Cell => ({ approved: 0, pending: 0, onLeave: null });
@@ -80,8 +87,8 @@ export const GET = handle(async (req) => {
     }
   }
 
-  const byDate: Record<string, { hours: number; costCents: number }> = Object.fromEntries(
-    dates.map((d) => [d, { hours: 0, costCents: 0 }]),
+  const byDate: Record<string, { hours: number; costCents?: number }> = Object.fromEntries(
+    dates.map((d) => [d, isManager ? { hours: 0, costCents: 0 } : { hours: 0 }]),
   );
   let weekCostCents = 0;
   let weekHours = 0;
@@ -97,24 +104,30 @@ export const GET = handle(async (req) => {
       approvedHours += cell.approved;
       pendingHours += cell.pending;
       byDate[date].hours += dayHours;
-      byDate[date].costCents += Math.round(dayHours * worker.hourlyRateCents);
+      if (isManager) {
+        byDate[date].costCents =
+          (byDate[date].costCents ?? 0) + Math.round(dayHours * worker.hourlyRateCents);
+      }
     }
     const totalHours = approvedHours + pendingHours;
     const cost = laborCost(totalHours, worker.hourlyRateCents, settings);
     weekCostCents += cost.totalCents;
     weekHours += totalHours;
     return {
-      worker,
+      worker: isManager
+        ? worker
+        : { id: worker.id, name: worker.name },
       cells,
       approvedHours,
       pendingHours,
       totalHours,
       overtimeHours: cost.overtimeHours,
-      cost,
+      ...(isManager ? { cost } : {}),
     };
   });
 
   return NextResponse.json({
+    viewer: isManager ? "MANAGER" : "WORKER",
     weekStart,
     weekEnd,
     dates,
@@ -126,7 +139,11 @@ export const GET = handle(async (req) => {
       periodStart: s.periodStart,
       totalHours: s.days.reduce((t, d) => t + d.hours, 0),
     })),
-    totals: { byDate, weekHours, weekCostCents },
+    totals: {
+      byDate,
+      weekHours,
+      ...(isManager ? { weekCostCents } : {}),
+    },
     settings: {
       weeklyHourLimit: settings.weeklyHourLimit,
       overtimeMultiplier: settings.overtimeMultiplier,

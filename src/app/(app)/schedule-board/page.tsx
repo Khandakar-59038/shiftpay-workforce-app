@@ -14,24 +14,25 @@ interface Cell {
   onLeave: "PAID" | "UNPAID" | null;
 }
 interface Row {
-  worker: { id: string; name: string; hourlyRateCents: number };
+  worker: { id: string; name: string; hourlyRateCents?: number };
   cells: Record<string, Cell>;
   approvedHours: number;
   pendingHours: number;
   totalHours: number;
   overtimeHours: number;
-  cost: { totalCents: number; overtimeCents: number };
+  cost?: { totalCents: number; overtimeCents: number };
 }
 interface Board {
+  viewer: "MANAGER" | "WORKER";
   weekStart: string;
   weekEnd: string;
   dates: string[];
   workers: Row[];
   pendingSchedules: { id: string; workerId: string; workerName: string; totalHours: number }[];
   totals: {
-    byDate: Record<string, { hours: number; costCents: number }>;
+    byDate: Record<string, { hours: number; costCents?: number }>;
     weekHours: number;
-    weekCostCents: number;
+    weekCostCents?: number;
   };
   settings: { weeklyHourLimit: number; overtimeMultiplier: number; currencyCode: string };
 }
@@ -72,8 +73,12 @@ export default function ScheduleBoardPage() {
   return (
     <>
       <PageHeader
-        title="Schedule Board"
-        sub="The week at a glance — everyone's hours, status, and projected labor cost."
+        title={board?.viewer === "WORKER" ? "Team Schedule" : "Schedule Board"}
+        sub={
+          board?.viewer === "WORKER"
+            ? "See when everyone on the team is working this week."
+            : "The week at a glance — everyone's hours, status, and projected labor cost."
+        }
         actions={
           <div className="flex items-center gap-2">
             <Button variant="outline" size="sm" onClick={() => setWeekStart(addDays(weekStart, -7))}>
@@ -93,30 +98,36 @@ export default function ScheduleBoardPage() {
         <Spinner label="Building the board…" />
       ) : (
         <>
-          <div className="rise grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <div
+            className={`rise grid grid-cols-2 gap-3 ${board.viewer === "MANAGER" ? "lg:grid-cols-4" : ""}`}
+          >
             <StatCard
               label="Scheduled hours"
               value={formatHours(board.totals.weekHours)}
               hint={`${formatDate(board.weekStart)} – ${formatDate(board.weekEnd)}`}
             />
-            <StatCard
-              label="Projected labor cost"
-              value={formatCents(board.totals.weekCostCents, currency)}
-              hint="overtime-aware"
-              tone="accent"
-            />
+            {board.totals.weekCostCents !== undefined && (
+              <StatCard
+                label="Projected labor cost"
+                value={formatCents(board.totals.weekCostCents, currency)}
+                hint="overtime-aware"
+                tone="accent"
+              />
+            )}
             <StatCard
               label="Overtime scheduled"
               value={formatHours(board.workers.reduce((s, w) => s + w.overtimeHours, 0))}
               tone={board.workers.some((w) => w.overtimeHours > 0) ? "amber" : "ink"}
               hint={`beyond ${board.settings.weeklyHourLimit}h/week`}
             />
-            <StatCard
-              label="Awaiting approval"
-              value={board.pendingSchedules.length}
-              tone={board.pendingSchedules.length > 0 ? "amber" : "ink"}
-              hint="pending schedules"
-            />
+            {board.viewer === "MANAGER" && (
+              <StatCard
+                label="Awaiting approval"
+                value={board.pendingSchedules.length}
+                tone={board.pendingSchedules.length > 0 ? "amber" : "ink"}
+                hint="pending schedules"
+              />
+            )}
           </div>
 
           <div className="rise rise-2 mt-5 overflow-x-auto rounded-lg border border-line bg-card">
@@ -141,9 +152,11 @@ export default function ScheduleBoardPage() {
                   <tr key={row.worker.id} className="rule last:border-b-0">
                     <td className="px-4 py-2.5">
                       <div className="font-medium">{row.worker.name}</div>
-                      <div className="font-mono text-[0.62rem] text-ink-faint">
-                        {formatCents(row.worker.hourlyRateCents, currency)}/h
-                      </div>
+                      {row.worker.hourlyRateCents !== undefined && (
+                        <div className="font-mono text-[0.62rem] text-ink-faint">
+                          {formatCents(row.worker.hourlyRateCents, currency)}/h
+                        </div>
+                      )}
                     </td>
                     {board.dates.map((d) => {
                       const cell = row.cells[d];
@@ -180,9 +193,11 @@ export default function ScheduleBoardPage() {
                           <span className="ml-1.5 text-xs text-amber">+{formatHours(row.overtimeHours)} OT</span>
                         )}
                       </div>
-                      <div className="tnum text-xs text-ink-soft">
-                        {formatCents(row.cost.totalCents, currency)}
-                      </div>
+                      {row.cost && (
+                        <div className="tnum text-xs text-ink-soft">
+                          {formatCents(row.cost.totalCents, currency)}
+                        </div>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -195,27 +210,35 @@ export default function ScheduleBoardPage() {
                   {board.dates.map((d) => (
                     <td key={d} className="tnum px-1 py-2.5 text-center">
                       <div>{board.totals.byDate[d].hours || "—"}</div>
-                      {board.totals.byDate[d].costCents > 0 && (
+                      {(board.totals.byDate[d].costCents ?? 0) > 0 && (
                         <div className="text-[0.65rem] text-ink-faint">
-                          {formatCents(board.totals.byDate[d].costCents, currency)}
+                          {formatCents(board.totals.byDate[d].costCents!, currency)}
                         </div>
                       )}
                     </td>
                   ))}
                   <td className="tnum px-4 py-2.5 text-right">
                     <div>{formatHours(board.totals.weekHours)}</div>
-                    <div className="text-[0.65rem] text-accent">
-                      {formatCents(board.totals.weekCostCents, currency)}
-                    </div>
+                    {board.totals.weekCostCents !== undefined && (
+                      <div className="text-[0.65rem] text-accent">
+                        {formatCents(board.totals.weekCostCents, currency)}
+                      </div>
+                    )}
                   </td>
                 </tr>
               </tfoot>
             </table>
           </div>
           <p className="mt-2 text-xs text-ink-faint">
-            Solid cells are approved; dashed amber cells await approval. Week cost pays hours beyond{" "}
-            {board.settings.weeklyHourLimit}h at ×{board.settings.overtimeMultiplier}. Day-column costs
-            are at base rate.
+            {board.viewer === "MANAGER" ? (
+              <>
+                Solid cells are approved; dashed amber cells await approval. Week cost pays hours beyond{" "}
+                {board.settings.weeklyHourLimit}h at ×{board.settings.overtimeMultiplier}. Day-column
+                costs are at base rate.
+              </>
+            ) : (
+              <>Approved shifts and leave for the whole team, one week at a time.</>
+            )}
           </p>
 
           {board.pendingSchedules.length > 0 && (

@@ -9,6 +9,7 @@ import { getLeaveBalance } from "../../../lib/leave-db";
 import { formatCents, formatHours } from "../../../lib/money";
 import { getSettings } from "../../../lib/settings";
 import { Card, EmptyState, PageHeader, Stamp, StatCard } from "../../../components/ui";
+import { TimeClock } from "../../../components/TimeClock";
 
 export const dynamic = "force-dynamic";
 
@@ -75,6 +76,9 @@ async function WorkerDashboard({ userId, name }: { userId: string; name: string 
         title={`Good day, ${name.split(" ")[0]}`}
         sub={`Week of ${formatDate(monday)} · ${formatDate(today)}`}
       />
+      <div className="rise mb-4">
+        <TimeClock />
+      </div>
       <div className="rise rise-1 grid grid-cols-2 gap-3 lg:grid-cols-4">
         <StatCard
           label="Worked this week"
@@ -104,9 +108,46 @@ async function WorkerDashboard({ userId, name }: { userId: string; name: string 
         />
       </div>
 
-      <div className="mt-6 grid gap-4 lg:grid-cols-2">
+      <Card className="rise rise-2 mt-6" title="This week's hours">
+        <ul className="grid grid-cols-7 gap-1 text-center">
+          {week.byDate.map((d) => (
+            <li
+              key={d.date}
+              className={`rounded-md border px-1 py-2 ${
+                d.date === today ? "border-accent/50 bg-accent-soft/40" : "border-line-soft bg-paper"
+              }`}
+            >
+              <div className="font-mono text-[0.6rem] uppercase text-ink-faint">
+                {formatDate(d.date).split(" ")[0]}
+              </div>
+              <div className="tnum mt-1 text-sm font-semibold">
+                {d.worked > 0 ? `${d.worked}h` : <span className="text-ink-faint/50">—</span>}
+              </div>
+              {d.actual !== null && (
+                <div
+                  className="mx-auto mt-1 size-1.5 rounded-full bg-accent"
+                  title="Punched via time clock"
+                />
+              )}
+            </li>
+          ))}
+        </ul>
+        <p className="mt-2 flex items-center gap-3 text-[0.65rem] text-ink-faint">
+          <span>
+            Total <strong className="tnum text-ink-soft">{formatHours(week.totalHours)}</strong>
+            {week.overtimeHours > 0 && (
+              <> · overtime <strong className="tnum text-amber">{formatHours(week.overtimeHours)}</strong></>
+            )}
+          </span>
+          <span className="flex items-center gap-1">
+            <span className="size-1.5 rounded-full bg-accent" /> = clocked hours
+          </span>
+        </p>
+      </Card>
+
+      <div className="mt-4 grid gap-4 lg:grid-cols-2">
         <Card
-          className="rise rise-2"
+          className="rise rise-3"
           title="Next 7 days"
           actions={
             <span className="flex items-center gap-2">

@@ -19,6 +19,18 @@ interface Schedule {
   days: { id: string; date: string; hours: number }[];
 }
 
+interface TimeEntry {
+  id: string;
+  date: string;
+  kind: "SCHEDULED" | "EXTRA";
+  clockIn: string;
+  clockOut: string | null;
+  hours: number;
+  note: string | null;
+  status: string;
+  worker: { id: string; name: string };
+}
+
 interface Impact {
   impacts: {
     weekKey: string;
@@ -39,9 +51,15 @@ export default function ApprovalsPage() {
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
 
+  const [entries, setEntries] = useState<TimeEntry[] | null>(null);
+
   const load = useCallback(async () => {
-    const data = await api<{ schedules: Schedule[] }>("/api/schedules");
+    const [data, entryData] = await Promise.all([
+      api<{ schedules: Schedule[] }>("/api/schedules"),
+      api<{ entries: TimeEntry[] }>("/api/time-entries?status=PENDING"),
+    ]);
     setSchedules(data.schedules);
+    setEntries(entryData.entries);
     // Surface overtime consequences before the manager decides.
     const pending = data.schedules.filter((s) => s.status === "PENDING");
     const results = await Promise.all(
@@ -74,15 +92,86 @@ export default function ApprovalsPage() {
     }
   }
 
+  async function decideEntry(entry: TimeEntry, action: "APPROVE" | "REJECT") {
+    const rejectNote =
+      action === "REJECT"
+        ? (window.prompt(`Note to ${entry.worker.name} (optional):`) ?? undefined)
+        : undefined;
+    setBusy(entry.id);
+    try {
+      await api(`/api/time-entries/${entry.id}/decision`, {
+        body: { action, ...(rejectNote ? { note: rejectNote } : {}) },
+      });
+      toast(
+        "success",
+        `${entry.worker.name}'s ${entry.hours}h shift ${action === "APPROVE" ? "approved — hours counted" : "rejected"}`,
+      );
+      await load();
+    } catch (err) {
+      toast("error", err instanceof Error ? err.message : "Decision failed");
+    } finally {
+      setBusy(null);
+    }
+  }
+
   const pending = schedules?.filter((s) => s.status === "PENDING") ?? [];
   const decided = schedules?.filter((s) => s.status !== "PENDING").slice(0, 10) ?? [];
+
+  const fmtTime = (iso: string) =>
+    new Date(iso).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
 
   return (
     <>
       <PageHeader
-        title="Schedule Approvals"
-        sub="Review submitted schedules day by day, then approve or send back."
+        title="Approvals"
+        sub="Clocked shifts and submitted schedules — review, then approve or send back."
       />
+
+      {entries && entries.length > 0 && (
+        <div className="rise mb-7">
+          <h2 className="mb-3 font-display text-xl font-semibold">
+            Clocked shifts <span className="text-sm font-normal text-ink-soft">({entries.length})</span>
+          </h2>
+          <ul className="space-y-2">
+            {entries.map((e) => (
+              <li
+                key={e.id}
+                className="flex flex-wrap items-center gap-3 rounded-lg border border-line bg-card px-4 py-3"
+              >
+                <Stamp value="PENDING" />
+                <div className="min-w-0 flex-1">
+                  <div className="text-sm font-medium">
+                    {e.worker.name}
+                    <span className="tnum ml-2 font-semibold">{e.hours}h</span>
+                    <span className="tnum ml-2 text-ink-soft">
+                      {formatDate(e.date)} · {fmtTime(e.clockIn)}–{e.clockOut ? fmtTime(e.clockOut) : "…"}
+                    </span>
+                    <span className="ml-2 font-mono text-[0.6rem] uppercase text-ink-faint">
+                      {e.kind === "SCHEDULED" ? "assigned shift" : "extra work"}
+                    </span>
+                  </div>
+                  {e.note && <div className="text-xs text-ink-soft">“{e.note}”</div>}
+                </div>
+                <span className="flex gap-2">
+                  <Button
+                    variant="danger"
+                    size="sm"
+                    disabled={busy === e.id}
+                    onClick={() => decideEntry(e, "REJECT")}
+                  >
+                    Reject
+                  </Button>
+                  <Button size="sm" disabled={busy === e.id} onClick={() => decideEntry(e, "APPROVE")}>
+                    {busy === e.id ? "…" : "Approve"}
+                  </Button>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      <h2 className="mb-3 font-display text-xl font-semibold">Schedules</h2>
 
       {schedules === null ? (
         <Spinner />
