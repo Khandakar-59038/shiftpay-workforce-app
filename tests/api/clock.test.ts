@@ -5,7 +5,7 @@ import { GET as getClock } from "../../src/app/api/clock/route";
 import { GET as listEntries } from "../../src/app/api/time-entries/route";
 import { POST as decideEntry } from "../../src/app/api/time-entries/[id]/decision/route";
 import { prisma } from "../../src/lib/db";
-import { addDays, mondayOf, todayStr } from "../../src/lib/dates";
+import { mondayOf, todayStr } from "../../src/lib/dates";
 import { workedHoursByDate } from "../../src/lib/hours";
 import { authCookie, createUser, jsonRequest, resetDb } from "./helpers";
 
