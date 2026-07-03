@@ -2,8 +2,9 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getSession } from "../../../lib/auth";
 import { prisma } from "../../../lib/db";
-import { addDays, formatDate, mondayOf, todayStr } from "../../../lib/dates";
+import { addDays, eachDate, formatDate, mondayOf, todayStr } from "../../../lib/dates";
 import { summarize } from "../../../lib/hours";
+import { laborCost } from "../../../lib/insights";
 import { getLeaveBalance } from "../../../lib/leave-db";
 import { formatCents, formatHours } from "../../../lib/money";
 import { getSettings } from "../../../lib/settings";
@@ -27,17 +28,44 @@ async function WorkerDashboard({ userId, name }: { userId: string; name: string 
   const today = todayStr();
   const monday = mondayOf(today);
 
-  const [schedule, week, balance, lastPayment, pendingLeaves] = await Promise.all([
-    prisma.schedule.findFirst({
-      where: { workerId: userId, periodStart: monday, status: { not: "SUPERSEDED" } },
-      orderBy: { submittedAt: "desc" },
-      include: { days: { orderBy: { date: "asc" } } },
-    }),
-    summarize(userId, monday, addDays(monday, 6), settings),
-    getLeaveBalance(userId, today),
-    prisma.payment.findFirst({ where: { workerId: userId }, orderBy: { createdAt: "desc" } }),
-    prisma.leaveRequest.count({ where: { workerId: userId, status: "PENDING" } }),
-  ]);
+  const [schedule, week, balance, lastPayment, pendingLeaves, upcomingDays, upcomingLeaves] =
+    await Promise.all([
+      prisma.schedule.findFirst({
+        where: { workerId: userId, periodStart: monday, status: { not: "SUPERSEDED" } },
+        orderBy: { submittedAt: "desc" },
+        include: { days: { orderBy: { date: "asc" } } },
+      }),
+      summarize(userId, monday, addDays(monday, 6), settings),
+      getLeaveBalance(userId, today),
+      prisma.payment.findFirst({ where: { workerId: userId }, orderBy: { createdAt: "desc" } }),
+      prisma.leaveRequest.count({ where: { workerId: userId, status: "PENDING" } }),
+      prisma.scheduleDay.findMany({
+        where: {
+          date: { gte: today, lte: addDays(today, 6) },
+          schedule: { workerId: userId, status: { in: ["APPROVED", "PENDING"] } },
+        },
+        include: { schedule: { select: { status: true } } },
+      }),
+      prisma.leaveRequest.findMany({
+        where: {
+          workerId: userId,
+          status: "APPROVED",
+          startDate: { lte: addDays(today, 6) },
+          endDate: { gte: today },
+        },
+      }),
+    ]);
+
+  const upcoming = eachDate(today, addDays(today, 6)).map((date) => {
+    const onLeave = upcomingLeaves.find((l) => l.startDate <= date && l.endDate >= date);
+    const day = upcomingDays.find((d) => d.date === date);
+    return {
+      date,
+      hours: day?.hours ?? 0,
+      pending: day?.schedule.status === "PENDING",
+      onLeave: onLeave?.type ?? null,
+    };
+  });
 
   const scheduledThisWeek = schedule?.days.reduce((s, d) => s + d.hours, 0) ?? 0;
 
@@ -79,38 +107,56 @@ async function WorkerDashboard({ userId, name }: { userId: string; name: string 
       <div className="mt-6 grid gap-4 lg:grid-cols-2">
         <Card
           className="rise rise-2"
-          title="This week's schedule"
+          title="Next 7 days"
           actions={
-            <Link href="/schedule" className="text-xs font-medium text-accent hover:underline">
-              Manage →
-            </Link>
+            <span className="flex items-center gap-2">
+              {schedule && <Stamp value={schedule.status} />}
+              <Link href="/schedule" className="text-xs font-medium text-accent hover:underline">
+                Manage →
+              </Link>
+            </span>
           }
         >
-          {schedule ? (
-            <div>
-              <div className="mb-3 flex items-center gap-2">
-                <Stamp value={schedule.status} />
-                {schedule.managerNote && (
-                  <span className="text-xs text-ink-soft">“{schedule.managerNote}”</span>
-                )}
-              </div>
-              <ul className="grid grid-cols-7 gap-1 text-center">
-                {schedule.days.map((d) => (
-                  <li key={d.id} className="rounded-md border border-line-soft bg-paper px-1 py-2">
-                    <div className="font-mono text-[0.6rem] uppercase text-ink-faint">
-                      {formatDate(d.date).split(" ")[0]} {d.date.slice(8)}
-                    </div>
-                    <div className="tnum mt-1 text-sm font-semibold">{d.hours}h</div>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ) : (
+          {schedule?.managerNote && schedule.status === "REJECTED" && (
+            <p className="mb-3 rounded-md border border-red/30 bg-red-soft px-3 py-2 text-xs text-red">
+              This week&apos;s schedule was rejected: “{schedule.managerNote}”
+            </p>
+          )}
+          {upcoming.every((d) => d.hours === 0 && !d.onLeave) ? (
             <EmptyState
-              title="No schedule submitted for this week"
+              title="Nothing scheduled in the next 7 days"
               hint="Set your hours so your manager can approve them."
             />
+          ) : (
+            <ul className="grid grid-cols-7 gap-1 text-center">
+              {upcoming.map((d) => (
+                <li
+                  key={d.date}
+                  className={`rounded-md border px-1 py-2 ${
+                    d.date === today ? "border-accent/50 bg-accent-soft/40" : "border-line-soft bg-paper"
+                  }`}
+                >
+                  <div className="font-mono text-[0.6rem] uppercase text-ink-faint">
+                    {formatDate(d.date).split(" ")[0]} {d.date.slice(8)}
+                  </div>
+                  <div className="tnum mt-1 text-sm font-semibold">
+                    {d.onLeave ? (
+                      <span className="text-accent">leave</span>
+                    ) : d.hours === 0 ? (
+                      <span className="text-ink-faint/60">off</span>
+                    ) : (
+                      <span className={d.pending ? "text-amber" : ""}>
+                        {d.hours}h{d.pending ? "?" : ""}
+                      </span>
+                    )}
+                  </div>
+                </li>
+              ))}
+            </ul>
           )}
+          <p className="mt-2 text-[0.65rem] text-ink-faint">
+            Amber “h?” hours are awaiting your manager&apos;s approval.
+          </p>
         </Card>
 
         <Card
@@ -156,23 +202,58 @@ async function WorkerDashboard({ userId, name }: { userId: string; name: string 
 
 async function ManagerDashboard({ name }: { name: string }) {
   const settings = await getSettings();
-  const [pendingSchedules, pendingLeaves, workers, lastRun, otAlerts] = await Promise.all([
-    prisma.schedule.count({ where: { status: "PENDING" } }),
-    prisma.leaveRequest.count({ where: { status: "PENDING" } }),
-    prisma.user.count({ where: { role: "WORKER", isActive: true } }),
-    prisma.payrollRun.findFirst({
-      orderBy: { createdAt: "desc" },
-      include: { payments: true },
-    }),
-    prisma.notification.findMany({
-      where: { type: "OVERTIME_ALERT" },
-      orderBy: { createdAt: "desc" },
-      take: 5,
-      distinct: ["href"],
-    }),
-  ]);
+  const today = todayStr();
+  const monday = mondayOf(today);
+  const [pendingSchedules, pendingLeaves, lastRun, otAlerts, todayDays, todayLeaves, weekDays, roster] =
+    await Promise.all([
+      prisma.schedule.count({ where: { status: "PENDING" } }),
+      prisma.leaveRequest.count({ where: { status: "PENDING" } }),
+      prisma.payrollRun.findFirst({
+        orderBy: { createdAt: "desc" },
+        include: { payments: true },
+      }),
+      prisma.notification.findMany({
+        where: { type: "OVERTIME_ALERT" },
+        orderBy: { createdAt: "desc" },
+        take: 5,
+        distinct: ["href"],
+      }),
+      prisma.scheduleDay.findMany({
+        where: { date: today, schedule: { status: "APPROVED" } },
+        include: { schedule: { include: { worker: { select: { id: true, name: true } } } } },
+        orderBy: { hours: "desc" },
+      }),
+      prisma.leaveRequest.findMany({
+        where: { status: "APPROVED", startDate: { lte: today }, endDate: { gte: today } },
+        include: { worker: { select: { id: true, name: true } } },
+      }),
+      prisma.scheduleDay.findMany({
+        where: {
+          date: { gte: monday, lte: addDays(monday, 6) },
+          schedule: { status: { in: ["APPROVED", "PENDING"] } },
+        },
+        include: { schedule: { select: { workerId: true } } },
+      }),
+      prisma.user.findMany({
+        where: { role: "WORKER", isActive: true },
+        select: { id: true, hourlyRateCents: true },
+      }),
+    ]);
 
   const lastRunTotal = lastRun?.payments.reduce((s, p) => s + p.netCents, 0) ?? 0;
+
+  // Projected labor cost for this week (OT-aware per worker).
+  const hoursByWorker = new Map<string, number>();
+  for (const day of weekDays) {
+    const id = day.schedule.workerId;
+    hoursByWorker.set(id, (hoursByWorker.get(id) ?? 0) + day.hours);
+  }
+  const weekCostCents = roster.reduce(
+    (sum, w) => sum + laborCost(hoursByWorker.get(w.id) ?? 0, w.hourlyRateCents, settings).totalCents,
+    0,
+  );
+  const onLeaveIds = new Set(todayLeaves.map((l) => l.worker.id));
+  const workingToday = todayDays.filter((d) => !onLeaveIds.has(d.schedule.worker.id));
 
   return (
     <>
@@ -190,7 +271,16 @@ async function ManagerDashboard({ name }: { name: string }) {
           tone={pendingLeaves > 0 ? "amber" : "ink"}
           hint={<Link href="/leave-approvals" className="text-accent hover:underline">review →</Link>}
         />
-        <StatCard label="Active workers" value={workers} hint="on the roster" />
+        <StatCard
+          label="Week labor cost"
+          value={formatCents(weekCostCents, settings.currencyCode)}
+          hint={
+            <Link href="/schedule-board" className="text-accent hover:underline">
+              schedule board →
+            </Link>
+          }
+          tone="accent"
+        />
         <StatCard
           label="Last payroll"
           value={lastRun ? formatCents(lastRunTotal, settings.currencyCode) : "—"}
@@ -199,12 +289,45 @@ async function ManagerDashboard({ name }: { name: string }) {
               ? `${lastRun.payments.length} payments · ${formatDate(lastRun.periodEnd)}`
               : "no runs yet"
           }
-          tone="accent"
         />
       </div>
 
       <div className="mt-6 grid gap-4 lg:grid-cols-2">
-        <Card className="rise rise-2" title="Overtime alerts">
+        <Card
+          className="rise rise-2"
+          title={`Today · ${formatDate(today)}`}
+          actions={
+            <Link href="/team-time" className="text-xs font-medium text-accent hover:underline">
+              Team time →
+            </Link>
+          }
+        >
+          {workingToday.length === 0 && todayLeaves.length === 0 ? (
+            <EmptyState title="No one is scheduled today" />
+          ) : (
+            <ul className="space-y-1.5">
+              {workingToday.map((d) => (
+                <li
+                  key={d.id}
+                  className="flex items-center justify-between rounded-md border border-line-soft bg-paper px-3 py-2 text-sm"
+                >
+                  <span className="font-medium">{d.schedule.worker.name}</span>
+                  <span className="tnum text-ink-soft">{formatHours(d.hours)}</span>
+                </li>
+              ))}
+              {todayLeaves.map((l) => (
+                <li
+                  key={l.id}
+                  className="flex items-center justify-between rounded-md border border-line-soft bg-paper px-3 py-2 text-sm opacity-70"
+                >
+                  <span>{l.worker.name}</span>
+                  <Stamp value={l.type} />
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
+        <Card className="rise rise-3" title="Overtime alerts">
           {otAlerts.length === 0 ? (
             <EmptyState title="No overtime alerts" hint="You'll hear about it here first." />
           ) : (
@@ -221,21 +344,6 @@ async function ManagerDashboard({ name }: { name: string }) {
               ))}
             </ul>
           )}
-        </Card>
-        <Card
-          className="rise rise-3"
-          title="Run payroll"
-          actions={
-            <Link href="/payroll" className="text-xs font-medium text-accent hover:underline">
-              Open payroll →
-            </Link>
-          }
-        >
-          <p className="text-sm text-ink-soft">
-            Disburse weekly or monthly payments. The ledger computes regular hours,
-            overtime at ×{settings.overtimeMultiplier}, paid leave, and unpaid-leave
-            deductions for every worker before you confirm.
-          </p>
         </Card>
       </div>
     </>

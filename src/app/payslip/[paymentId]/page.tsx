@@ -29,6 +29,18 @@ export default async function PayslipPage({
     redirect("/dashboard");
   }
 
+  // Year-to-date across this worker's payments up to and including this one.
+  const year = payment.createdAt.getFullYear();
+  const ytdPayments = await prisma.payment.findMany({
+    where: {
+      workerId: payment.workerId,
+      createdAt: { gte: new Date(`${year}-01-01`), lte: payment.createdAt },
+    },
+    select: { netCents: true, deductionCents: true },
+  });
+  const ytdNet = ytdPayments.reduce((s, p) => s + p.netCents, 0);
+  const ytdGross = ytdPayments.reduce((s, p) => s + p.netCents + p.deductionCents, 0);
+
   const snapshot = JSON.parse(payment.payrollRun.settingsSnapshot) as {
     overtimeMultiplier?: number;
     currencyCode?: string;
@@ -138,6 +150,16 @@ export default async function PayslipPage({
             </tr>
           </tfoot>
         </table>
+
+        <div className="tnum mt-6 flex items-center justify-between rounded-md border border-line-soft bg-paper px-4 py-2.5 text-xs text-ink-soft">
+          <span className="font-mono text-[0.62rem] uppercase tracking-wider text-ink-faint">
+            Year to date ({year})
+          </span>
+          <span>
+            Gross {formatCents(ytdGross, currency)} · Net{" "}
+            <strong className="text-ink">{formatCents(ytdNet, currency)}</strong>
+          </span>
+        </div>
 
         <footer className="mt-10 flex items-center justify-between border-t border-line pt-4 font-mono text-[0.6rem] uppercase tracking-[0.14em] text-ink-faint">
           <span>Ref {payment.id.slice(-8)}</span>

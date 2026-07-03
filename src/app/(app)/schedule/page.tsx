@@ -86,6 +86,20 @@ export default function SchedulePage() {
     setHours((h) => ({ ...h, [date]: n }));
   }
 
+  function copyPreviousWeek() {
+    const prevStart = addDays(weekStart, -7);
+    const source = history?.find(
+      (s) =>
+        s.periodType === "WEEKLY" && s.periodStart === prevStart && s.status !== "SUPERSEDED",
+    );
+    if (!source) {
+      toast("error", "No schedule found for last week to copy");
+      return;
+    }
+    setHours(Object.fromEntries(source.days.map((d) => [addDays(d.date, 7), d.hours])));
+    toast("success", `Copied ${source.days.reduce((t, d) => t + d.hours, 0)}h from last week`);
+  }
+
   function standardWeek() {
     setHours(
       Object.fromEntries(
@@ -181,6 +195,11 @@ export default function SchedulePage() {
           <Button variant="outline" size="sm" onClick={standardWeek}>
             Standard 8h weekdays
           </Button>
+          {periodType === "WEEKLY" && (
+            <Button variant="outline" size="sm" onClick={copyPreviousWeek}>
+              Copy last week
+            </Button>
+          )}
           <Button variant="ghost" size="sm" onClick={() => setHours({})}>
             Clear
           </Button>

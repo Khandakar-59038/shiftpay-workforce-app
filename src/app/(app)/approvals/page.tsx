@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { formatDate } from "../../../lib/dates";
 import { api } from "../../../lib/client";
+import { formatCents } from "../../../lib/money";
 import { Modal } from "../../../components/Modal";
 import { useToast } from "../../../components/toast";
 import { Button, Card, EmptyState, Field, PageHeader, Spinner, Stamp, TextArea } from "../../../components/ui";
@@ -18,9 +19,22 @@ interface Schedule {
   days: { id: string; date: string; hours: number }[];
 }
 
+interface Impact {
+  impacts: {
+    weekKey: string;
+    totalHours: number;
+    addedOvertime: number;
+    addedOvertimeCostCents: number;
+  }[];
+  totalAddedOvertime: number;
+  totalAddedOvertimeCostCents: number;
+  settings: { weeklyHourLimit: number; overtimeMultiplier: number; currencyCode: string };
+}
+
 export default function ApprovalsPage() {
   const toast = useToast();
   const [schedules, setSchedules] = useState<Schedule[] | null>(null);
+  const [impacts, setImpacts] = useState<Record<string, Impact>>({});
   const [rejecting, setRejecting] = useState<Schedule | null>(null);
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
@@ -28,6 +42,12 @@ export default function ApprovalsPage() {
   const load = useCallback(async () => {
     const data = await api<{ schedules: Schedule[] }>("/api/schedules");
     setSchedules(data.schedules);
+    // Surface overtime consequences before the manager decides.
+    const pending = data.schedules.filter((s) => s.status === "PENDING");
+    const results = await Promise.all(
+      pending.map(async (s) => [s.id, await api<Impact>(`/api/schedules/${s.id}/impact`)] as const),
+    );
+    setImpacts(Object.fromEntries(results));
   }, []);
 
   useEffect(() => {
@@ -99,6 +119,28 @@ export default function ApprovalsPage() {
                     </span>
                   ))}
                 </div>
+                {impacts[s.id] && impacts[s.id].totalAddedOvertime > 0 && (
+                  <div className="mt-3 rounded-md border border-amber/40 bg-amber-soft px-3 py-2 text-sm text-amber">
+                    Approving adds{" "}
+                    <strong className="tnum">{impacts[s.id].totalAddedOvertime}h of overtime</strong>{" "}
+                    (≈{" "}
+                    <span className="tnum">
+                      {formatCents(
+                        impacts[s.id].totalAddedOvertimeCostCents,
+                        impacts[s.id].settings.currencyCode,
+                      )}
+                    </span>{" "}
+                    at ×{impacts[s.id].settings.overtimeMultiplier}) —{" "}
+                    {impacts[s.id]
+                      .impacts.filter((w) => w.addedOvertime > 0)
+                      .map(
+                        (w) =>
+                          `${s.worker.name.split(" ")[0]} would be at ${w.totalHours}h in ${w.weekKey}`,
+                      )
+                      .join("; ")}
+                    .
+                  </div>
+                )}
                 <div className="mt-4 flex items-center justify-between border-t border-line pt-3">
                   <span className="text-sm text-ink-soft">
                     Total <span className="tnum font-semibold text-ink">{total}h</span> · submitted{" "}
