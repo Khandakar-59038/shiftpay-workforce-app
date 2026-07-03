@@ -13,7 +13,7 @@ export const GET = handle(async (req) => {
       where: { workerId: session.userId, status: "ACTIVE" },
     }),
     prisma.timeEntry.findMany({
-      where: { workerId: session.userId, date: today, status: { not: "ACTIVE" } },
+      where: { workerId: session.userId, date: today },
       orderBy: { clockIn: "asc" },
     }),
     prisma.scheduleDay.findFirst({
