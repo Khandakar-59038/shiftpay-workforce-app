@@ -14,6 +14,7 @@ model User {
   passwordHash    String
   role            String // WORKER | MANAGER | ADMIN
   hourlyRateCents Int              @default(0)
+  phone           String?
   isActive        Boolean          @default(true)
   createdAt       DateTime         @default(now())
   schedules       Schedule[]       @relation("WorkerSchedules")
@@ -21,6 +22,38 @@ model User {
   payments        Payment[]
   notifications   Notification[]
   adjustments     TimeAdjustment[] @relation("WorkerAdjustments")
+  timeEntries     TimeEntry[]      @relation("WorkerTimeEntries")
+  sentMessages    Message[]        @relation("SentMessages")
+  receivedMessages Message[]       @relation("ReceivedMessages")
+}
+
+model TimeEntry {
+  id            String    @id @default(cuid())
+  workerId      String
+  worker        User      @relation("WorkerTimeEntries", fields: [workerId], references: [id])
+  date          String // YYYY-MM-DD of clock-in
+  kind          String // SCHEDULED (assigned shift) | EXTRA (unscheduled company work)
+  scheduleDayId String?
+  clockIn       DateTime
+  clockOut      DateTime?
+  hours         Float     @default(0) // rounded to 0.25 at clock-out
+  note          String?
+  status        String    @default("ACTIVE") // ACTIVE | PENDING | APPROVED | REJECTED
+  decidedById   String?
+  decidedAt     DateTime?
+  managerNote   String?
+  createdAt     DateTime  @default(now())
+}
+
+model Message {
+  id          String    @id @default(cuid())
+  senderId    String
+  sender      User      @relation("SentMessages", fields: [senderId], references: [id])
+  recipientId String? // null = company channel
+  recipient   User?     @relation("ReceivedMessages", fields: [recipientId], references: [id])
+  body        String
+  readAt      DateTime?
+  createdAt   DateTime  @default(now())
 }
 
 model CompanySettings {

@@ -3,6 +3,8 @@ import { hashPassword, sessionToken, SESSION_COOKIE } from "../../src/lib/auth";
 
 /** Delete every row, children before parents. */
 export async function resetDb() {
+  await prisma.message.deleteMany();
+  await prisma.timeEntry.deleteMany();
   await prisma.notification.deleteMany();
   await prisma.payment.deleteMany();
   await prisma.payrollRun.deleteMany();

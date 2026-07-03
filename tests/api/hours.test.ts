@@ -84,6 +84,109 @@ describe("workedHoursByDate", () => {
   });
 });
 
+describe("workedHoursByDate with clock entries (actuals override plan)", () => {
+  const entry = (
+    workerId: string,
+    date: string,
+    hours: number,
+    status = "APPROVED",
+    kind = "SCHEDULED",
+  ) =>
+    prisma.timeEntry.create({
+      data: {
+        workerId,
+        date,
+        kind,
+        clockIn: new Date(`${date}T09:00:00`),
+        clockOut: new Date(`${date}T17:00:00`),
+        hours,
+        status,
+      },
+    });
+
+  it("approved punches replace scheduled hours for that date", async () => {
+    const worker = await createUser("WORKER");
+    const yesterday = addDays(todayStr(), -1);
+    await approvedWeekFor(worker.id, yesterday, 8);
+    await entry(worker.id, yesterday, 6.5);
+
+    const byDate = await workedHoursByDate(worker.id, yesterday, yesterday);
+    const day = byDate.find((d) => d.date === yesterday)!;
+    expect(day.worked).toBe(6.5);
+    expect(day.actual).toBe(6.5);
+  });
+
+  it("pending punches do not count yet", async () => {
+    const worker = await createUser("WORKER");
+    const yesterday = addDays(todayStr(), -1);
+    await approvedWeekFor(worker.id, yesterday, 8);
+    await entry(worker.id, yesterday, 6.5, "PENDING");
+
+    const byDate = await workedHoursByDate(worker.id, yesterday, yesterday);
+    expect(byDate.find((d) => d.date === yesterday)?.worked).toBe(8);
+  });
+
+  it("extra work on an unscheduled day counts", async () => {
+    const worker = await createUser("WORKER");
+    const yesterday = addDays(todayStr(), -1);
+    await entry(worker.id, yesterday, 3, "APPROVED", "EXTRA");
+
+    const byDate = await workedHoursByDate(worker.id, yesterday, yesterday);
+    expect(byDate.find((d) => d.date === yesterday)?.worked).toBe(3);
+  });
+
+  it("multiple approved punches on one day sum, and adjustments still apply", async () => {
+    const worker = await createUser("WORKER");
+    const manager = await createUser("MANAGER");
+    const yesterday = addDays(todayStr(), -1);
+    await entry(worker.id, yesterday, 6);
+    await entry(worker.id, yesterday, 2, "APPROVED", "EXTRA");
+    await prisma.timeAdjustment.create({
+      data: {
+        workerId: worker.id,
+        date: yesterday,
+        deltaHours: 1,
+        reason: "forgot to punch first hour",
+        createdById: manager.id,
+      },
+    });
+
+    const byDate = await workedHoursByDate(worker.id, yesterday, yesterday);
+    expect(byDate.find((d) => d.date === yesterday)?.worked).toBe(9);
+  });
+
+  it("punches on an approved-leave day still count", async () => {
+    const worker = await createUser("WORKER");
+    const yesterday = addDays(todayStr(), -1);
+    await prisma.leaveRequest.create({
+      data: {
+        workerId: worker.id,
+        type: "PAID",
+        startDate: yesterday,
+        endDate: yesterday,
+        reason: "trip",
+        status: "APPROVED",
+      },
+    });
+    await entry(worker.id, yesterday, 4, "APPROVED", "EXTRA");
+
+    const byDate = await workedHoursByDate(worker.id, yesterday, yesterday);
+    expect(byDate.find((d) => d.date === yesterday)?.worked).toBe(4);
+  });
+});
+
+async function approvedWeekFor(workerId: string, date: string, hours: number) {
+  return prisma.schedule.create({
+    data: {
+      workerId,
+      periodType: "WEEKLY",
+      periodStart: mondayOf(date),
+      status: "APPROVED",
+      days: { create: [{ date, hours }] },
+    },
+  });
+}
+
 describe("summarize", () => {
   it("buckets by ISO week and splits overtime", async () => {
     const worker = await createUser("WORKER");

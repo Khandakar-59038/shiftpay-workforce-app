@@ -1,5 +1,7 @@
 // Worked-hours aggregation. Hours come from APPROVED schedule days for dates
 // up to today, zeroed on approved-leave days, plus manager time adjustments.
+// When a date has APPROVED clock entries (punches), those actuals replace the
+// scheduled base for that date — the punch is the record, the schedule the plan.
 
 import { prisma } from "./db";
 import { eachDate, isoWeekKey, todayStr } from "./dates";
@@ -10,6 +12,8 @@ export interface DayHours {
   scheduled: number;
   adjustment: number;
   worked: number;
+  /** Sum of approved punched hours for the date, or null if no punches. */
+  actual: number | null;
   onLeave: "PAID" | "UNPAID" | null;
 }
 
@@ -20,7 +24,7 @@ export async function workedHoursByDate(
 ): Promise<DayHours[]> {
   const today = todayStr();
 
-  const [scheduleDays, leaves, adjustments] = await Promise.all([
+  const [scheduleDays, leaves, adjustments, entries] = await Promise.all([
     prisma.scheduleDay.findMany({
       where: {
         date: { gte: from, lte: to },
@@ -32,6 +36,9 @@ export async function workedHoursByDate(
     }),
     prisma.timeAdjustment.findMany({
       where: { workerId, date: { gte: from, lte: to } },
+    }),
+    prisma.timeEntry.findMany({
+      where: { workerId, status: "APPROVED", date: { gte: from, lte: to } },
     }),
   ]);
 
@@ -52,17 +59,24 @@ export async function workedHoursByDate(
     adjustmentByDate.set(adj.date, (adjustmentByDate.get(adj.date) ?? 0) + adj.deltaHours);
   }
 
+  const actualByDate = new Map<string, number>();
+  for (const entry of entries) {
+    actualByDate.set(entry.date, (actualByDate.get(entry.date) ?? 0) + entry.hours);
+  }
+
   return eachDate(from, to).map((date) => {
     const inFuture = date > today;
     const onLeave = leaveByDate.get(date) ?? null;
     const scheduled = inFuture ? 0 : (scheduledByDate.get(date) ?? 0);
     const adjustment = inFuture ? 0 : (adjustmentByDate.get(date) ?? 0);
-    const base = onLeave ? 0 : scheduled;
+    const actual = actualByDate.get(date) ?? null;
+    const base = actual !== null ? actual : onLeave ? 0 : scheduled;
     return {
       date,
       scheduled,
       adjustment,
       worked: Math.max(0, base + adjustment),
+      actual,
       onLeave,
     };
   });
