@@ -15,8 +15,13 @@ model User {
   role            String // WORKER | MANAGER | ADMIN
   hourlyRateCents Int              @default(0)
   phone           String?
+  address         String?
+  emergencyContact String?
   isActive        Boolean          @default(true)
   createdAt       DateTime         @default(now())
+  documents       Document[]
+  tasksAssigned   Task[]           @relation("TaskAssignee")
+  weekLocks       WeekLock[]
   schedules       Schedule[]       @relation("WorkerSchedules")
   leaveRequests   LeaveRequest[]   @relation("WorkerLeave")
   payments        Payment[]
@@ -62,6 +67,7 @@ model CompanySettings {
   overtimeMultiplier     Float  @default(1.5)
   overtimeAlertThreshold Float  @default(10)
   paidLeaveDaysPerYear   Int    @default(15)
+  sickLeaveDaysPerYear   Int    @default(10)
   standardDayHours       Float  @default(8)
   currencyCode           String @default("USD")
   payFrequencyDefault    String @default("WEEKLY")
@@ -158,4 +164,39 @@ model Notification {
   href      String?
   readAt    DateTime?
   createdAt DateTime  @default(now())
+}
+
+model Document {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  name      String // original filename
+  mime      String
+  size      Int // bytes
+  storedAs  String // filename on disk under uploads/
+  createdAt DateTime @default(now())
+}
+
+model Task {
+  id          String    @id @default(cuid())
+  title       String
+  details     String?
+  assigneeId  String
+  assignee    User      @relation("TaskAssignee", fields: [assigneeId], references: [id])
+  createdById String
+  dueDate     String? // YYYY-MM-DD
+  status      String    @default("OPEN") // OPEN | DONE
+  doneAt      DateTime?
+  createdAt   DateTime  @default(now())
+}
+
+model WeekLock {
+  id        String   @id @default(cuid())
+  workerId  String
+  worker    User     @relation(fields: [workerId], references: [id])
+  weekStart String // Monday, YYYY-MM-DD
+  note      String?
+  createdAt DateTime @default(now())
+
+  @@unique([workerId, weekStart])
 }
