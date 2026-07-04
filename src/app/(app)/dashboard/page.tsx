@@ -92,9 +92,9 @@ async function WorkerDashboard({ userId, name }: { userId: string; name: string 
           hint={`limit ${settings.weeklyHourLimit}h/week`}
         />
         <StatCard
-          label="Paid leave left"
-          value={`${balance.remaining}d`}
-          hint={`${balance.used} of ${balance.allowance} used`}
+          label="Time off left"
+          value={`${balance.vacation.remaining}d`}
+          hint={`sick leave: ${balance.sick.remaining}d left`}
           tone="accent"
         />
         <StatCard
@@ -215,8 +215,12 @@ async function WorkerDashboard({ userId, name }: { userId: string; name: string 
               <span className="tnum font-semibold">{pendingLeaves}</span>
             </li>
             <li className="flex items-center justify-between">
-              <span className="text-ink-soft">Paid-leave balance</span>
-              <span className="tnum font-semibold">{balance.remaining} days</span>
+              <span className="text-ink-soft">Time-off balance</span>
+              <span className="tnum font-semibold">{balance.vacation.remaining} days</span>
+            </li>
+            <li className="flex items-center justify-between">
+              <span className="text-ink-soft">Sick-leave balance</span>
+              <span className="tnum font-semibold">{balance.sick.remaining} days</span>
             </li>
             <li className="flex items-center justify-between">
               <span className="text-ink-soft">Payment status</span>

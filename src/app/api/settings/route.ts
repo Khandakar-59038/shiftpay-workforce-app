@@ -16,6 +16,7 @@ const patchSchema = z.object({
   overtimeMultiplier: z.number().min(1).max(5).optional(),
   overtimeAlertThreshold: z.number().min(0).max(80).optional(),
   paidLeaveDaysPerYear: z.number().int().min(0).max(365).optional(),
+  sickLeaveDaysPerYear: z.number().int().min(0).max(365).optional(),
   standardDayHours: z.number().min(1).max(24).optional(),
   currencyCode: z.enum(["USD", "BDT", "EUR", "GBP", "INR"]).optional(),
   payFrequencyDefault: z.enum(["WEEKLY", "MONTHLY"]).optional(),

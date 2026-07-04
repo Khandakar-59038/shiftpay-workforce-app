@@ -90,6 +90,18 @@ describe("validateLeaveRequest", () => {
     expect(r.ok).toBe(true);
   });
 
+  it("checks sick leave against its own balance", () => {
+    const r = validateLeaveRequest({
+      type: "SICK",
+      startDate: "2026-07-13",
+      endDate: "2026-07-15", // 3 weekdays
+      existing,
+      balance: 2,
+    });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toMatch(/sick/i);
+  });
+
   it("allows valid paid leave within balance", () => {
     const r = validateLeaveRequest({
       type: "PAID",

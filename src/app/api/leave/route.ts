@@ -5,11 +5,17 @@ import { ApiError, handle, parseBody } from "../../../lib/api";
 import { requireRole, requireUser } from "../../../lib/auth";
 import { formatDate, isValidDate, todayStr } from "../../../lib/dates";
 import { validateLeaveRequest } from "../../../lib/leave";
-import { getLeaveBalance } from "../../../lib/leave-db";
+import { getLeaveBalance, remainingForType } from "../../../lib/leave-db";
 import { notifyManagers } from "../../../lib/notify";
 
+export const LEAVE_LABELS: Record<string, string> = {
+  PAID: "time off",
+  SICK: "sick leave",
+  UNPAID: "unpaid leave",
+};
+
 const requestSchema = z.object({
-  type: z.enum(["PAID", "UNPAID"]),
+  type: z.enum(["PAID", "SICK", "UNPAID"]),
   startDate: z.string(),
   endDate: z.string(),
   reason: z.string().min(1).max(500),
@@ -26,14 +32,14 @@ export const POST = handle(async (req) => {
   const existing = await prisma.leaveRequest.findMany({
     where: { workerId: session.userId, status: { in: ["PENDING", "APPROVED"] } },
   });
-  const balance = await getLeaveBalance(session.userId, body.startDate);
+  const remaining = await remainingForType(session.userId, body.startDate, body.type);
 
   const validation = validateLeaveRequest({
     type: body.type,
     startDate: body.startDate,
     endDate: body.endDate,
     existing,
-    balance: balance.remaining,
+    balance: remaining,
   });
   if (!validation.ok) throw new ApiError(400, validation.error);
 
@@ -50,7 +56,7 @@ export const POST = handle(async (req) => {
     await notifyManagers(tx, {
       type: "LEAVE_REQUESTED",
       title: "Leave request awaiting approval",
-      body: `${session.name} requested ${validation.days} day(s) of ${body.type.toLowerCase()} leave (${formatDate(body.startDate)} – ${formatDate(body.endDate)}).`,
+      body: `${session.name} requested ${validation.days} day(s) of ${LEAVE_LABELS[body.type]} (${formatDate(body.startDate)} – ${formatDate(body.endDate)}).`,
       href: "/leave-approvals",
     });
     return created;
@@ -73,7 +79,7 @@ export const GET = handle(async (req) => {
     orderBy: { createdAt: "desc" },
   });
 
-  const balance = workerId ? await getLeaveBalance(workerId, todayStr()) : null;
+  const balances = workerId ? await getLeaveBalance(workerId, todayStr()) : null;
 
-  return NextResponse.json({ leaves, balance });
+  return NextResponse.json({ leaves, balances });
 });

@@ -9,7 +9,7 @@ import { getSettings } from "../../../lib/settings";
 interface Cell {
   approved: number;
   pending: number;
-  onLeave: "PAID" | "UNPAID" | null;
+  onLeave: "PAID" | "SICK" | "UNPAID" | null;
 }
 
 // Managers see everything including pay data; workers see who works when
@@ -83,7 +83,7 @@ export const GET = handle(async (req) => {
     if (!row) continue;
     for (const date of eachDate(leave.startDate, leave.endDate)) {
       const cell = row.get(date);
-      if (cell) cell.onLeave = leave.type as "PAID" | "UNPAID";
+      if (cell) cell.onLeave = leave.type as "PAID" | "SICK" | "UNPAID";
     }
   }
 

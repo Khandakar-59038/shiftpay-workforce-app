@@ -10,6 +10,7 @@ interface Settings {
   overtimeMultiplier: number;
   overtimeAlertThreshold: number;
   paidLeaveDaysPerYear: number;
+  sickLeaveDaysPerYear: number;
   standardDayHours: number;
   currencyCode: string;
   payFrequencyDefault: string;
@@ -75,9 +76,12 @@ export default function SettingsPage() {
           </Card>
 
           <Card className="rise rise-2" title="Leave policy">
-            <div className="grid gap-4 sm:grid-cols-2">
-              <Field label="Paid leave days / year">
+            <div className="grid gap-4 sm:grid-cols-3">
+              <Field label="Time-off days / year">
                 <Input type="number" min={0} max={365} value={settings.paidLeaveDaysPerYear} onChange={num("paidLeaveDaysPerYear")} />
+              </Field>
+              <Field label="Sick days / year">
+                <Input type="number" min={0} max={365} value={settings.sickLeaveDaysPerYear} onChange={num("sickLeaveDaysPerYear")} />
               </Field>
               <Field label="Standard day hours" hint="Used to value a day of leave.">
                 <Input type="number" min={1} max={24} step={0.5} value={settings.standardDayHours} onChange={num("standardDayHours")} />

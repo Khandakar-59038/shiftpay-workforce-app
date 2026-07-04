@@ -28,12 +28,15 @@ interface ExistingLeave {
   status: string; // PENDING | APPROVED | REJECTED
 }
 
+export type LeaveType = "PAID" | "SICK" | "UNPAID";
+
 interface LeaveRequestInput {
-  type: "PAID" | "UNPAID";
+  type: LeaveType;
   startDate: string;
   endDate: string;
   existing: ExistingLeave[];
-  balance: number; // remaining paid-leave days
+  /** Remaining days of the requested type (ignored for UNPAID). */
+  balance: number;
 }
 
 export type LeaveValidation = { ok: true; days: number } | { ok: false; error: string };
@@ -58,10 +61,11 @@ export function validateLeaveRequest(input: LeaveRequestInput): LeaveValidation 
     return { ok: false, error: "The selected range contains no working days (Mon–Fri)." };
   }
 
-  if (input.type === "PAID" && days > input.balance) {
+  if (input.type !== "UNPAID" && days > input.balance) {
+    const label = input.type === "SICK" ? "sick-leave" : "time-off";
     return {
       ok: false,
-      error: `Not enough paid-leave balance: requested ${days} day(s), remaining ${input.balance}.`,
+      error: `Not enough ${label} balance: requested ${days} day(s), remaining ${input.balance}.`,
     };
   }
 

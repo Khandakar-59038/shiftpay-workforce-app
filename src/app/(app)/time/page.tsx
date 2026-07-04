@@ -12,7 +12,7 @@ interface DayRow {
   scheduled: number;
   adjustment: number;
   worked: number;
-  onLeave: "PAID" | "UNPAID" | null;
+  onLeave: "PAID" | "SICK" | "UNPAID" | null;
 }
 interface Summary {
   byDate: DayRow[];

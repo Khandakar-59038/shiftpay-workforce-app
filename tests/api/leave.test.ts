@@ -101,8 +101,9 @@ describe("POST /api/leave/[id]/decision", () => {
       jsonRequest("/api/leave", { method: "GET", cookie: await authCookie(worker) }),
     );
     const data = await listRes.json();
-    expect(data.balance.used).toBe(2);
-    expect(data.balance.remaining).toBe(13); // default 15 − 2
+    expect(data.balances.vacation.used).toBe(2);
+    expect(data.balances.vacation.remaining).toBe(13); // default 15 − 2
+    expect(data.balances.sick.used).toBe(0);
   });
 
   it("forbids workers from deciding", async () => {
@@ -134,6 +135,36 @@ describe("POST /api/leave/[id]/decision", () => {
       );
     expect((await decide()).status).toBe(200);
     expect((await decide()).status).toBe(409);
+  });
+});
+
+describe("sick leave", () => {
+  it("draws down the sick balance, not time off", async () => {
+    const worker = await createUser("WORKER");
+    const manager = await createUser("MANAGER");
+    const { leave } = await (await request(worker, { type: "SICK" })).json();
+    await decideLeave(
+      jsonRequest(`/api/leave/${leave.id}/decision`, {
+        cookie: await authCookie(manager),
+        body: { action: "APPROVE" },
+      }),
+      { params: Promise.resolve({ id: leave.id }) },
+    );
+    const data = await (
+      await listLeave(jsonRequest("/api/leave", { method: "GET", cookie: await authCookie(worker) }))
+    ).json();
+    expect(data.balances.sick.used).toBe(2);
+    expect(data.balances.vacation.used).toBe(0);
+  });
+
+  it("rejects sick leave beyond the sick allowance", async () => {
+    const worker = await createUser("WORKER");
+    await prisma.companySettings.update({
+      where: { id: 1 },
+      data: { sickLeaveDaysPerYear: 1 },
+    });
+    const res = await request(worker, { type: "SICK" }); // 2 weekdays > 1
+    expect(res.status).toBe(400);
   });
 });
 

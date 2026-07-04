@@ -14,7 +14,7 @@ export interface DayHours {
   worked: number;
   /** Sum of approved punched hours for the date, or null if no punches. */
   actual: number | null;
-  onLeave: "PAID" | "UNPAID" | null;
+  onLeave: "PAID" | "SICK" | "UNPAID" | null;
 }
 
 export async function workedHoursByDate(
@@ -47,10 +47,10 @@ export async function workedHoursByDate(
     scheduledByDate.set(day.date, (scheduledByDate.get(day.date) ?? 0) + day.hours);
   }
 
-  const leaveByDate = new Map<string, "PAID" | "UNPAID">();
+  const leaveByDate = new Map<string, "PAID" | "SICK" | "UNPAID">();
   for (const leave of leaves) {
     for (const date of eachDate(leave.startDate, leave.endDate)) {
-      leaveByDate.set(date, leave.type as "PAID" | "UNPAID");
+      leaveByDate.set(date, leave.type as "PAID" | "SICK" | "UNPAID");
     }
   }
 

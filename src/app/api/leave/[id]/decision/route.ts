@@ -4,8 +4,8 @@ import { prisma } from "../../../../../lib/db";
 import { ApiError, handle, parseBody } from "../../../../../lib/api";
 import { requireRole } from "../../../../../lib/auth";
 import { formatDate } from "../../../../../lib/dates";
-import { leaveDaysInRange } from "../../../../../lib/leave";
-import { getLeaveBalance } from "../../../../../lib/leave-db";
+import { leaveDaysInRange, type LeaveType } from "../../../../../lib/leave";
+import { remainingForType } from "../../../../../lib/leave-db";
 import { notify } from "../../../../../lib/notify";
 
 const decisionSchema = z.object({
@@ -26,13 +26,17 @@ export const POST = handle<Ctx>(async (req, { params }) => {
     throw new ApiError(409, `This request was already ${leave.status.toLowerCase()}`);
   }
 
-  if (action === "APPROVE" && leave.type === "PAID") {
-    const balance = await getLeaveBalance(leave.workerId, leave.startDate);
+  if (action === "APPROVE" && leave.type !== "UNPAID") {
+    const remaining = await remainingForType(
+      leave.workerId,
+      leave.startDate,
+      leave.type as LeaveType,
+    );
     const days = leaveDaysInRange(leave.startDate, leave.endDate);
-    if (days > balance.remaining) {
+    if (days > remaining) {
       throw new ApiError(
         409,
-        `Cannot approve: worker has ${balance.remaining} paid day(s) left, request needs ${days}.`,
+        `Cannot approve: worker has ${remaining} ${leave.type === "SICK" ? "sick" : "time-off"} day(s) left, request needs ${days}.`,
       );
     }
   }

@@ -20,7 +20,7 @@ import {
 
 interface Leave {
   id: string;
-  type: "PAID" | "UNPAID";
+  type: "PAID" | "SICK" | "UNPAID";
   startDate: string;
   endDate: string;
   reason: string;
@@ -28,18 +28,22 @@ interface Leave {
   managerNote: string | null;
   createdAt: string;
 }
-interface Balance {
+interface Summary {
   allowance: number;
   used: number;
   remaining: number;
+}
+interface Balances {
+  vacation: Summary;
+  sick: Summary;
 }
 
 export default function LeavePage() {
   const toast = useToast();
   const [leaves, setLeaves] = useState<Leave[] | null>(null);
-  const [balance, setBalance] = useState<Balance | null>(null);
+  const [balance, setBalance] = useState<Balances | null>(null);
   const [form, setForm] = useState({
-    type: "PAID" as "PAID" | "UNPAID",
+    type: "PAID" as "PAID" | "SICK" | "UNPAID",
     startDate: addDays(todayStr(), 7),
     endDate: addDays(todayStr(), 7),
     reason: "",
@@ -48,9 +52,9 @@ export default function LeavePage() {
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    const data = await api<{ leaves: Leave[]; balance: Balance }>("/api/leave");
+    const data = await api<{ leaves: Leave[]; balances: Balances }>("/api/leave");
     setLeaves(data.leaves);
-    setBalance(data.balance);
+    setBalance(data.balances);
   }, []);
 
   useEffect(() => {
@@ -78,10 +82,18 @@ export default function LeavePage() {
       <PageHeader title="Leave" sub="Request paid or unpaid leave and track your balance." />
 
       {balance && (
-        <div className="rise rise-1 grid grid-cols-3 gap-3">
-          <StatCard label="Annual allowance" value={`${balance.allowance}d`} hint="paid leave" />
-          <StatCard label="Used this year" value={`${balance.used}d`} />
-          <StatCard label="Remaining" value={`${balance.remaining}d`} tone="accent" />
+        <div className="rise rise-1 grid grid-cols-2 gap-3">
+          <StatCard
+            label="Time off"
+            value={`${balance.vacation.remaining}d left`}
+            hint={`${balance.vacation.used} of ${balance.vacation.allowance} used this year`}
+            tone="accent"
+          />
+          <StatCard
+            label="Sick leave"
+            value={`${balance.sick.remaining}d left`}
+            hint={`${balance.sick.used} of ${balance.sick.allowance} used this year`}
+          />
         </div>
       )}
 
@@ -91,9 +103,12 @@ export default function LeavePage() {
             <Field label="Type" hint={form.type === "UNPAID" ? "Unpaid leave is deducted from payroll." : undefined}>
               <Select
                 value={form.type}
-                onChange={(e) => setForm((f) => ({ ...f, type: e.target.value as "PAID" | "UNPAID" }))}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, type: e.target.value as "PAID" | "SICK" | "UNPAID" }))
+                }
               >
-                <option value="PAID">Paid leave</option>
+                <option value="PAID">Time off (paid)</option>
+                <option value="SICK">Sick leave (paid)</option>
                 <option value="UNPAID">Unpaid leave</option>
               </Select>
             </Field>

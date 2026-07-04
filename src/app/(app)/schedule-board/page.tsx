@@ -11,7 +11,7 @@ import { Button, PageHeader, Spinner, Stamp, StatCard } from "../../../component
 interface Cell {
   approved: number;
   pending: number;
-  onLeave: "PAID" | "UNPAID" | null;
+  onLeave: "PAID" | "SICK" | "UNPAID" | null;
 }
 interface Row {
   worker: { id: string; name: string; hourlyRateCents?: number };
@@ -165,7 +165,7 @@ export default function ScheduleBoardPage() {
                         <td key={d} className={`px-1 py-2.5 text-center ${d === today ? "bg-accent-soft/40" : ""}`}>
                           {cell.onLeave ? (
                             <span
-                              className={`stamp ${cell.onLeave === "PAID" ? "text-accent bg-accent-soft" : "text-ink-faint bg-line-soft"}`}
+                              className={`stamp ${cell.onLeave === "UNPAID" ? "text-ink-faint bg-line-soft" : cell.onLeave === "SICK" ? "text-red bg-red-soft" : "text-accent bg-accent-soft"}`}
                             >
                               leave
                             </span>

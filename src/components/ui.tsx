@@ -39,6 +39,7 @@ const stampColors: Record<string, string> = {
   SUPERSEDED: "text-ink-faint bg-line-soft",
   PAID: "text-accent bg-accent-soft",
   UNPAID: "text-ink-soft bg-line-soft",
+  SICK: "text-red bg-red-soft",
   WORKER: "text-ink-soft bg-line-soft",
   MANAGER: "text-accent bg-accent-soft",
   ADMIN: "text-amber bg-amber-soft",
