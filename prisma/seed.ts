@@ -11,6 +11,9 @@ import { computeWorkerPayroll } from "../src/lib/payroll-db";
 import { getSettings } from "../src/lib/settings";
 
 async function wipe() {
+  await prisma.weekLock.deleteMany();
+  await prisma.task.deleteMany();
+  await prisma.document.deleteMany();
   await prisma.message.deleteMany();
   await prisma.timeEntry.deleteMany();
   await prisma.notification.deleteMany();
@@ -285,6 +288,46 @@ async function main() {
   await msg(manager.id, "Reminder: submit next week's schedules by Friday. The board fills up fast.");
   await msg(alice.id, "The new espresso machine is here. Team morale +10.");
   await msg(alice.id, "Hi Maya — could you look at my Saturday hours when you get a minute?", manager.id);
+
+  // ── Quick tasks, sick leave, and a locked week ──
+  await prisma.task.create({
+    data: {
+      title: "Restock shelf 4 before opening",
+      assigneeId: alice.id,
+      createdById: manager.id,
+      dueDate: addDays(today, 1),
+    },
+  });
+  await notify(prisma, alice.id, {
+    type: "TASK_ASSIGNED",
+    title: "New quick task",
+    body: `Maya Rahman assigned you: “Restock shelf 4 before opening” (due ${addDays(today, 1)}).`,
+    href: "/tasks",
+  });
+  await prisma.task.create({
+    data: {
+      title: "Renew food-safety certificate",
+      assigneeId: bob.id,
+      createdById: bob.id,
+      status: "DONE",
+      doneAt: new Date(),
+    },
+  });
+  await prisma.leaveRequest.create({
+    data: {
+      workerId: bob.id,
+      type: "SICK",
+      startDate: addDays(weekA, 8), // Tuesday of last week
+      endDate: addDays(weekA, 8),
+      reason: "Flu",
+      status: "APPROVED",
+      decidedById: manager.id,
+      decidedAt: new Date(),
+    },
+  });
+  await prisma.weekLock.create({
+    data: { workerId: carol.id, weekStart: weekA, note: "All correct." },
+  });
 
   const counts = {
     users: await prisma.user.count(),

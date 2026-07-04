@@ -10,6 +10,7 @@ import { formatCents, formatHours } from "../../../lib/money";
 import { getSettings } from "../../../lib/settings";
 import { Card, EmptyState, PageHeader, Stamp, StatCard } from "../../../components/ui";
 import { TimeClock } from "../../../components/TimeClock";
+import { QuickTasks } from "../../../components/QuickTasks";
 
 export const dynamic = "force-dynamic";
 
@@ -76,8 +77,11 @@ async function WorkerDashboard({ userId, name }: { userId: string; name: string 
         title={`Good day, ${name.split(" ")[0]}`}
         sub={`Week of ${formatDate(monday)} · ${formatDate(today)}`}
       />
-      <div className="rise mb-4">
-        <TimeClock />
+      <div className="rise mb-4 grid gap-4 lg:grid-cols-3">
+        <div className="lg:col-span-2">
+          <TimeClock />
+        </div>
+        <QuickTasks />
       </div>
       <div className="rise rise-1 grid grid-cols-2 gap-3 lg:grid-cols-4">
         <StatCard

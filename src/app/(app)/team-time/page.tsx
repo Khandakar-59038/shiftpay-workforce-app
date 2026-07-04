@@ -2,7 +2,7 @@
 
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { addDays, formatDate, mondayOf, monthRange, todayStr } from "../../../lib/dates";
+import { addDays, formatDate, isoWeekKey, mondayOf, monthRange, todayStr } from "../../../lib/dates";
 import { api } from "../../../lib/client";
 import { formatHours } from "../../../lib/money";
 import { Modal } from "../../../components/Modal";
@@ -58,6 +58,7 @@ function TeamTime() {
   const [range, setRange] = useState({ from: addDays(thisMonday, -14), to: addDays(thisMonday, 6) });
   const [summary, setSummary] = useState<Summary | null>(null);
   const [limit, setLimit] = useState(40);
+  const [lockedWeeks, setLockedWeeks] = useState<Set<string>>(new Set());
   const [adjusting, setAdjusting] = useState(false);
   const [adj, setAdj] = useState({ date: todayStr(), deltaHours: "-1", reason: "" });
   const [busy, setBusy] = useState(false);
@@ -83,6 +84,13 @@ function TeamTime() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    if (!workerId) return;
+    void api<{ locks: { weekStart: string }[] }>(`/api/week-locks?workerId=${workerId}`).then(
+      (d) => setLockedWeeks(new Set(d.locks.map((l) => isoWeekKey(l.weekStart)))),
+    );
+  }, [workerId]);
 
   async function submitAdjustment(e: React.FormEvent) {
     e.preventDefault();
@@ -184,7 +192,10 @@ function TeamTime() {
                       ot > 0 ? "border-amber/40 bg-amber-soft" : "border-line-soft bg-paper"
                     }`}
                   >
-                    <div className="font-mono text-[0.65rem] uppercase text-ink-faint">{w.weekKey}</div>
+                    <div className="flex items-center justify-between font-mono text-[0.65rem] uppercase text-ink-faint">
+                      {w.weekKey}
+                      {lockedWeeks.has(w.weekKey) && <Stamp value="LOCKED" />}
+                    </div>
                     <div className="tnum text-lg font-semibold">
                       {formatHours(w.hours)}
                       {ot > 0 && <span className="ml-2 text-sm text-amber">+{formatHours(ot)} OT</span>}

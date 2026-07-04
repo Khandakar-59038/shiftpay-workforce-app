@@ -1,11 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useToast } from "../../../components/toast";
 import { addDays, formatDate, mondayOf, monthRange, todayStr } from "../../../lib/dates";
 import { api } from "../../../lib/client";
 import { formatHours } from "../../../lib/money";
 import { Icon } from "../../../components/icons";
-import { Card, PageHeader, Spinner, Stamp, StatCard } from "../../../components/ui";
+import { Button, Card, PageHeader, Spinner, Stamp, StatCard } from "../../../components/ui";
 
 interface DayRow {
   date: string;
@@ -37,8 +38,10 @@ function presets() {
 }
 
 export default function TimePage() {
+  const toast = useToast();
   const ranges = useMemo(presets, []);
   const [range, setRange] = useState({ from: ranges[0].from, to: ranges[0].to });
+  const [locks, setLocks] = useState<{ weekStart: string }[]>([]);
   const [summary, setSummary] = useState<Summary | null>(null);
   const [limit, setLimit] = useState(40);
   const [error, setError] = useState<string | null>(null);
@@ -61,6 +64,34 @@ export default function TimePage() {
     void load();
   }, [load]);
 
+  const loadLocks = useCallback(async () => {
+    const data = await api<{ locks: { weekStart: string }[] }>("/api/week-locks");
+    setLocks(data.locks);
+  }, []);
+
+  useEffect(() => {
+    void loadLocks();
+  }, [loadLocks]);
+
+  // The range is lockable when it is exactly one Monday-started week, not in the future.
+  const weekRange =
+    range.from === mondayOf(range.from) && range.to === addDays(range.from, 6) ? range.from : null;
+  const lockable = weekRange !== null && weekRange <= mondayOf(todayStr());
+  const locked = weekRange !== null && locks.some((l) => l.weekStart === weekRange);
+
+  async function lockWeek() {
+    if (!weekRange) return;
+    if (!window.confirm("Lock this week's hours? This tells your manager they are final."))
+      return;
+    try {
+      await api("/api/week-locks", { body: { weekStart: weekRange } });
+      toast("success", "Week locked — your manager has been notified");
+      await loadLocks();
+    } catch (err) {
+      toast("error", err instanceof Error ? err.message : "Lock failed");
+    }
+  }
+
   const activeDays = summary?.byDate.filter((d) => d.worked > 0 || d.scheduled > 0 || d.onLeave) ?? [];
 
   return (
@@ -69,12 +100,20 @@ export default function TimePage() {
         title="Time & Overtime"
         sub="Worked hours from approved schedules, with overtime counted per week."
         actions={
+          <>
+            {locked && <Stamp value="LOCKED" className="mr-1" />}
+            {lockable && !locked && (
+              <Button variant="outline" size="sm" onClick={lockWeek}>
+                Lock this week&apos;s hours
+              </Button>
+            )}
           <a
             href={`/api/export/timesheet?from=${range.from}&to=${range.to}`}
             className="inline-flex items-center gap-1.5 rounded-md border border-line bg-card px-3 py-2 text-sm font-medium text-ink hover:border-accent hover:text-accent"
           >
             <Icon name="download" className="size-4" /> CSV
           </a>
+          </>
         }
       />
 

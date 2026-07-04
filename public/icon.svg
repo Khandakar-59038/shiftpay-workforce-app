@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="112" fill="#12211c"/>
+  <!-- shift handoff: two offset ledger bars -->
+  <rect x="118" y="150" width="212" height="64" rx="32" fill="#e4f1ea"/>
+  <rect x="182" y="298" width="212" height="64" rx="32" fill="#0b6b4f"/>
+  <circle cx="394" cy="182" r="32" fill="#0b6b4f"/>
+  <circle cx="118" cy="330" r="32" fill="#e4f1ea"/>
+</svg>

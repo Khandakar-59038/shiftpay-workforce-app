@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { getSession } from "../../lib/auth";
 import { prisma } from "../../lib/db";
 import { Bell } from "../../components/Bell";
-import { Nav } from "../../components/Nav";
+import { MobileTabBar, Nav } from "../../components/Nav";
 import { UserMenu } from "../../components/UserMenu";
 import { ToastProvider } from "../../components/toast";
 
@@ -39,9 +39,10 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             <Bell initialUnread={unread} />
             <UserMenu name={session.name} role={session.role} />
           </header>
-          <main className="mx-auto w-full max-w-6xl flex-1 px-5 py-7 md:px-8">{children}</main>
+          <main className="mx-auto w-full max-w-6xl flex-1 px-5 py-7 pb-24 md:px-8 md:pb-7">{children}</main>
         </div>
       </div>
+      <MobileTabBar role={session.role} />
     </ToastProvider>
   );
 }
