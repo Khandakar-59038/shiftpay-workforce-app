@@ -223,16 +223,22 @@ describe("time entry decisions", () => {
     expect(second.status).toBe(409);
   });
 
-  it("lists pending entries for managers only", async () => {
+  it("scopes entry listings: workers see only their own, managers see all", async () => {
     const worker = await createUser("WORKER");
+    const other = await createUser("WORKER");
     const manager = await createUser("MANAGER");
-    const cookie = await authCookie(worker);
-    await pendingEntry(cookie, worker.id);
+    await pendingEntry(await authCookie(worker), worker.id);
+    await pendingEntry(await authCookie(other), other.id);
 
-    const forbidden = await listEntries(
-      jsonRequest("/api/time-entries?status=PENDING", { method: "GET", cookie }),
+    const own = await listEntries(
+      jsonRequest("/api/time-entries?status=PENDING", {
+        method: "GET",
+        cookie: await authCookie(worker),
+      }),
     );
-    expect(forbidden.status).toBe(403);
+    const ownData = await own.json();
+    expect(ownData.entries).toHaveLength(1);
+    expect(ownData.entries[0].worker.id).toBe(worker.id);
 
     const res = await listEntries(
       jsonRequest("/api/time-entries?status=PENDING", {
@@ -241,7 +247,6 @@ describe("time entry decisions", () => {
       }),
     );
     const { entries } = await res.json();
-    expect(entries).toHaveLength(1);
-    expect(entries[0].worker.name).toBeTruthy();
+    expect(entries).toHaveLength(2);
   });
 });
